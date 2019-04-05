@@ -10,8 +10,10 @@
 #ifndef __TASKQUEUETEST_
 #define __TASKQUEUETEST_
 
-#include "TaskQueue.h"
 #include <thread>
+#include <vector>
+
+#include "TaskQueue.h"
 
 struct Job {
     Job(std::string message, unsigned int thread_num, unsigned int job_num) {
@@ -29,7 +31,7 @@ public:
     TaskQueueTest() = default;
     
     ~TaskQueueTest();
-
+    
     // Deleted copy constructor
     TaskQueueTest(const TaskQueueTest&) = delete;
 
@@ -41,7 +43,8 @@ public:
 
     // Deleted move operator
     TaskQueueTest& operator=(TaskQueueTest&&) = default;
-    
+
+
     bool runTest(const bool use_pop_try,
                  const unsigned int queue_length,
                  const unsigned int num_producers,
@@ -53,33 +56,33 @@ private:
     void terminateThreads();
     
     unsigned int consume(const bool use_pop_try, 
-		const std::chrono::milliseconds sleep_time_between_pops,
-		const int num_jobs,
-		std::shared_ptr< TaskQueue<Job> > queue);
-    
+        const std::chrono::milliseconds sleep_time_between_pops,
+        const unsigned int num_jobs,
+        std::shared_ptr< TaskQueue<Job> > queue);
+
     void startProducerThreads(const unsigned int num_producers,
                               const unsigned int num_jobs,
                               const std::chrono::milliseconds sleep_time_ms,
-                              std::shared_ptr< TaskQueue<Job> > queue,
-                              std::vector< std::shared_ptr< std::vector< std::shared_ptr<Job> > > > &lost_jobs_rec);
-    
-    static void producerThread(const int thread_num,
-		const int num_jobs,
-		const std::chrono::milliseconds sleep_time,
-		std::shared_ptr< TaskQueue<Job> >
-		task_queue,
-		std::shared_ptr< std::vector< std::shared_ptr<Job> > > lost_jobs_rec);
-    
-    static void incrementSkippedJobs();
-    
-    static int getSkippedJobs();
-    
-    std::unique_ptr<TaskQueue<Job> > queue_;
+                              std::shared_ptr< TaskQueue<Job> > queue);
+
+    static void producerThread(const unsigned int thread_num,
+                              const unsigned int num_jobs,
+                              const std::chrono::milliseconds sleep_time,
+                              std::shared_ptr< TaskQueue<Job> >
+                              task_queue);
+
+    static int getSkippedJobCount();
+
+    static void addSkippedJob(std::shared_ptr<Job> job);
+
+    static unsigned int skipped_job_count_;   //!< Static so can only use one instance at a time, quick hack
+    static std::mutex skipped_job_mtx_;
+    static std::vector<std::shared_ptr<Job> > skipped_jobs_;
+
+    std::unique_ptr< TaskQueue<Job> > queue_;
     bool test_running_ = false;
     bool finish_test_ = false;
     std::vector< std::shared_ptr<std::thread> > producers_;
-    static unsigned int skipped_job_count;   //!< Static so can only use one instance at a time, quick hack
-    static std::mutex skipped_job_count_mtx;
 };
 
 #endif
