@@ -11,7 +11,6 @@
 #define __TASK_QUEUE__
 
 #include <condition_variable>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <vector>
