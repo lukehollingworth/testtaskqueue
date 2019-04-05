@@ -10,10 +10,11 @@
 #ifndef __TASK_QUEUE__
 #define __TASK_QUEUE__
 
+#include <condition_variable>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <vector>
-
 
 constexpr unsigned int default_queue_size = 1000; //!< Default queue size
 
