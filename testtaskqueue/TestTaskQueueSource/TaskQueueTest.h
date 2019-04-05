@@ -29,8 +29,18 @@ public:
     TaskQueueTest() = default;
     
     ~TaskQueueTest();
-    
-    void terminateThreads();
+
+    // Deleted copy constructor
+    TaskQueueTest(const TaskQueueTest&) = delete;
+
+    // Deleted move constructor
+    TaskQueueTest(TaskQueueTest&&) = delete;
+
+    // Deleted assignment operator
+    TaskQueueTest& operator=(const TaskQueueTest&) = delete;
+
+    // Deleted move operator
+    TaskQueueTest& operator=(TaskQueueTest&&) = default;
     
     bool runTest(const bool use_pop_try,
                  const unsigned int queue_length,
@@ -40,18 +50,25 @@ public:
                  const std::chrono::milliseconds sleep_time_consumer);
     
 private:
+    void terminateThreads();
     
-    unsigned int consume(const bool use_pop_try, const std::chrono::milliseconds sleep_time_between_pops, const int num_jobs, std::shared_ptr< TaskQueue<Job> > queue);
+    unsigned int consume(const bool use_pop_try, 
+		const std::chrono::milliseconds sleep_time_between_pops,
+		const int num_jobs,
+		std::shared_ptr< TaskQueue<Job> > queue);
     
-    void startProducerThreads(
-                              const unsigned int num_producers,
+    void startProducerThreads(const unsigned int num_producers,
                               const unsigned int num_jobs,
                               const std::chrono::milliseconds sleep_time_ms,
                               std::shared_ptr< TaskQueue<Job> > queue,
                               std::vector< std::shared_ptr< std::vector< std::shared_ptr<Job> > > > &lost_jobs_rec);
     
-    static void producerThread(const int thread_num, const int num_jobs, const std::chrono::milliseconds sleep_time, std::shared_ptr< TaskQueue<Job> > task_queue,
-                               std::shared_ptr< std::vector< std::shared_ptr<Job> > > lost_jobs_rec);
+    static void producerThread(const int thread_num,
+		const int num_jobs,
+		const std::chrono::milliseconds sleep_time,
+		std::shared_ptr< TaskQueue<Job> >
+		task_queue,
+		std::shared_ptr< std::vector< std::shared_ptr<Job> > > lost_jobs_rec);
     
     static void incrementSkippedJobs();
     
