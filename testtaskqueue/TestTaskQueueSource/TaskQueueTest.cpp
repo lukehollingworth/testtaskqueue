@@ -16,8 +16,9 @@
 #include <thread>
 #include "TaskQueueTest.h"
 
-unsigned int TaskQueueTest::skipped_job_count = 0;
-std::mutex TaskQueueTest::skipped_job_count_mtx;
+unsigned int TaskQueueTest::skipped_job_count_ = 0;
+std::mutex TaskQueueTest::skipped_job_mtx_;
+std::vector<std::shared_ptr<Job> > TaskQueueTest::skipped_jobs_;
 
 TaskQueueTest::~TaskQueueTest() {
     terminateThreads();
@@ -41,28 +42,25 @@ bool TaskQueueTest::runTest(const bool use_pop_try,
     bool success = false;
     if(!test_running_) {
         test_running_ = true;
-        skipped_job_count = 0;
         std::shared_ptr< TaskQueue<Job> > queue = std::make_shared< TaskQueue<Job> >(queue_length);
-        std::vector< std::shared_ptr< std::vector< std::shared_ptr<Job> > > > lost_jobs_rec;
-        startProducerThreads(num_producers, num_jobs_per_producer, sleep_time_producer, queue, lost_jobs_rec);
+        startProducerThreads(num_producers, num_jobs_per_producer, sleep_time_producer, queue);
         unsigned int consumed_job_count = consume(use_pop_try, sleep_time_consumer, num_jobs_per_producer * num_producers, queue);
-        int lost_job_count = 0;
-        for(auto jobs : lost_jobs_rec) {
-            lost_job_count += jobs->size();
-        }
-        if(lost_job_count > 0) {
-            std::cout << lost_job_count << " jobs were lost because the queue was full, they are;\n";
-            for(auto jobs : lost_jobs_rec) {
-                for(auto job : *jobs.get()) {
-                    std::cout << "Skipped job: " << job->message << "\n";
-                }
+
+        if(skipped_job_count_ > 0) {
+            std::cout << skipped_job_count_  << " jobs were lost because the queue was full, they are;\n";
+            for(auto job : skipped_jobs_) {
+              if (job.get()) {
+                std::cout << "Skipped job: " << job->message << "\n";
+              } else {
+                std::cout << "job null" << std::endl;
+              }
             }
             std::cout << std::endl;
         }
         unsigned int num_jobs_exp = num_producers * num_jobs_per_producer;
-        unsigned int num_jobs_done = lost_job_count + consumed_job_count;
+        unsigned int num_jobs_done = skipped_job_count_ + consumed_job_count;
         std::cout << "Jobs consumed " << consumed_job_count << std::endl;
-        std::cout << "Jobs skipped " << lost_job_count << std::endl;
+        std::cout << "Jobs skipped " << skipped_job_count_ << std::endl;
         std::cout << "Total jobs processed and skipped " << num_jobs_done << std::endl;
         std::cout << "Expected jobs processed and skipped " << num_jobs_exp << std::endl;
         if (num_jobs_exp == num_jobs_done) {
@@ -70,13 +68,19 @@ bool TaskQueueTest::runTest(const bool use_pop_try,
         } else {
             std::cout << "TEST_FAILED" << std::endl << std::endl;
         }
+        skipped_jobs_.clear();
+        skipped_job_count_ = 0;
         finish_test_ = true;
         success = true;
     }
     return success;
 }
 
-unsigned int TaskQueueTest::consume(const bool use_pop_try, const std::chrono::milliseconds sleep_time_between_pops, const int num_jobs, std::shared_ptr< TaskQueue<Job> > queue) {
+unsigned int TaskQueueTest::consume(const bool use_pop_try,
+    const std::chrono::milliseconds sleep_time_between_pops,
+    const unsigned int num_jobs,
+    std::shared_ptr< TaskQueue<Job> > queue) {
+
     unsigned int consumeCount = 0;
     while(1) {
         std::shared_ptr<Job> job;
@@ -101,7 +105,7 @@ unsigned int TaskQueueTest::consume(const bool use_pop_try, const std::chrono::m
             success = true;
         }
         if(success) {
-            int skipped = getSkippedJobs();
+            int skipped = getSkippedJobCount();
             if(++consumeCount + skipped >= num_jobs) {
                 std::cout << "TEST FINISHED" << std::endl;
                 break;
@@ -112,28 +116,24 @@ unsigned int TaskQueueTest::consume(const bool use_pop_try, const std::chrono::m
 }
 
 void TaskQueueTest::startProducerThreads(
-                          const unsigned int num_producers,
-                          const unsigned int num_jobs,
-                          const std::chrono::milliseconds sleep_time_ms,
-                          std::shared_ptr< TaskQueue<Job> > queue,
-                          std::vector< std::shared_ptr< std::vector< std::shared_ptr<Job> > > > &lost_jobs_rec) {
-    
-    lost_jobs_rec.resize(num_producers);
-    for(auto &lost_job_vec : lost_jobs_rec) {
-        lost_job_vec = std::make_shared<std::vector<std::shared_ptr<Job> > >();
-    }
-    std::vector< std::shared_ptr<std::thread> > producers;
+  const unsigned int num_producers,
+  const unsigned int num_jobs,
+  const std::chrono::milliseconds sleep_time_ms,
+  std::shared_ptr< TaskQueue<Job> > queue) {
+
+  std::vector< std::shared_ptr<std::thread> > producers;
     for (unsigned int i = 0; i < num_producers; i++) {
-        std::shared_ptr< std::vector< std::shared_ptr<Job> > > rec = lost_jobs_rec.at(i);
         std::shared_ptr<std::thread> producer =
-        std::make_shared<std::thread>(producerThread, i, num_jobs, sleep_time_ms, queue, rec);
+          std::make_shared<std::thread>(producerThread, i, num_jobs, sleep_time_ms, queue);
         producers_.push_back(producer);
     }
 }
 
-void TaskQueueTest::producerThread(const int thread_num, const int num_jobs, const std::chrono::milliseconds sleep_time, std::shared_ptr< TaskQueue<Job> > task_queue,
-                           std::shared_ptr< std::vector< std::shared_ptr<Job> > > lost_jobs_rec) {
-    
+void TaskQueueTest::producerThread(const unsigned int thread_num, 
+  const unsigned int num_jobs, 
+  const std::chrono::milliseconds sleep_time, 
+  std::shared_ptr< TaskQueue<Job> > task_queue) {
+
     for(unsigned int i = 0; i < num_jobs; i++) {
         if (sleep_time != std::chrono::milliseconds(0)) {
             std::this_thread::sleep_for(sleep_time);
@@ -142,20 +142,21 @@ void TaskQueueTest::producerThread(const int thread_num, const int num_jobs, con
         ss << "Thread:" << thread_num << " job:" << i;
         std::shared_ptr<Job> job = std::make_shared<Job>(ss.str(), thread_num, i);
         job->message = ss.str();
+
         if(!task_queue->push(job)) {
-            lost_jobs_rec->push_back(job);
-            incrementSkippedJobs();
-        }
+            addSkippedJob(job);
+        } 
     }
 }
 
-void TaskQueueTest::incrementSkippedJobs() {
-    std::unique_lock<std::mutex> lock(skipped_job_count_mtx);
-    skipped_job_count++;
+int TaskQueueTest::getSkippedJobCount() {
+    std::unique_lock<std::mutex> lock(skipped_job_mtx_);
+    int ret_val = skipped_job_count_;
+    return ret_val;
 }
 
-int TaskQueueTest::getSkippedJobs() {
-    std::unique_lock<std::mutex> lock(skipped_job_count_mtx);
-    int ret_val = skipped_job_count;
-    return ret_val;
+void TaskQueueTest::addSkippedJob(std::shared_ptr<Job> job) {
+  std::unique_lock<std::mutex> lock(skipped_job_mtx_);
+  skipped_job_count_++;
+  skipped_jobs_.push_back(job);
 }
