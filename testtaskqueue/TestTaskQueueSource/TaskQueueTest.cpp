@@ -85,10 +85,11 @@ unsigned int TaskQueueTest::consume(const bool use_pop_try, const std::chrono::m
             std::tie(success, job) = queue->pop_try();
             if (success) {
                 std::cout << "Popped job: " << job->message << std::endl;
+            } else {
                 std::cout << "No job ready - poll again in " << sleep_time_between_pops.count() << " ms" << std::endl;
                 if(sleep_time_between_pops.count()) {
                     std::this_thread::sleep_for(sleep_time_between_pops);
-                }
+                }                
             }
         } else {
             job = queue->pop();
