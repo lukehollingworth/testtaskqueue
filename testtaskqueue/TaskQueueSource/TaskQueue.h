@@ -21,7 +21,7 @@ constexpr unsigned int default_queue_size = 1000; //!< Default queue size
  * @brief A FIFO task queue can be used to pass work items from multiple producer
  * threads to a single consumer thread. The queue is of a fixed size specified during
  * construction.
- */
+ */          
 template<class T>
 class TaskQueue {
 
@@ -40,7 +40,7 @@ public:
    * @param task A shared pointer of the task to queue.
    * @return True if successful, false if not. Fails if the queue is full.
    */
-  bool push(const std::shared_ptr<T> task);
+  bool push(const std::shared_ptr<T> &task);
   
   /**
    * @brief Pop a task from the queue.
@@ -58,7 +58,7 @@ public:
    * and a shared pointer of the popped task
    */
   std::tuple<bool, std::shared_ptr<T> > pop_try();
-  
+
 private:
   /**
    * @brief Implementation for to pop a task from the queue.
@@ -75,7 +75,7 @@ private:
   typename std::vector< std::shared_ptr<T> >::iterator read_it_;    //!< Iterator for reading from the queue
   size_t queue_cnt_ = 0;  //!< Number of tasks in the queue
 
-};
+};            
 
 template<class T>
 TaskQueue<T>::TaskQueue(const size_t queue_size) {
@@ -85,9 +85,9 @@ TaskQueue<T>::TaskQueue(const size_t queue_size) {
 }
 
 template<class T>
-bool TaskQueue<T>::push(const std::shared_ptr<T> job) {
-  bool success = false;
-  std::unique_lock<std::mutex> lk(queue_mutex_);
+bool TaskQueue<T>::push(const std::shared_ptr<T> &job) {
+  bool success = false;                      
+  std::lock_guard<std::mutex> lk(queue_mutex_);
   const size_t queue_size = queue_.size();
   if (queue_cnt_ < queue_size) {
     *write_it_ = job;
@@ -98,7 +98,7 @@ bool TaskQueue<T>::push(const std::shared_ptr<T> job) {
     queue_cnt_++;
     cv_.notify_one();
     success = true;
-  }
+  }                               
   return success;
 }
 
@@ -111,7 +111,7 @@ std::shared_ptr<T> TaskQueue<T>::pop() {
     auto check_func = [this] {return this->queue_cnt_ != 0; };
     cv_.wait(lck, check_func);
   }
-  return popImp();
+  return popImp();                                          
 }
 
 template<class T>
@@ -128,7 +128,9 @@ std::tuple<bool, std::shared_ptr<T> > TaskQueue<T>::pop_try() {
 
 template<class T>
 std::shared_ptr<T> TaskQueue<T>::popImp() {
-  std::shared_ptr<T> ret_val = *read_it_++;
+  std::shared_ptr<T> ret_val = *read_it_;
+  *read_it_ = nullptr;
+  read_it_++;
   if (read_it_ == queue_.end()) {
     read_it_ = queue_.begin();
   }
