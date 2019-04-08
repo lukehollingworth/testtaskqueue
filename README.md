@@ -10,11 +10,11 @@ cmake - https://cmake.org/install/
 ## Installing
 Example is using a bash console, where CWD is the testtaskqueue folder at the root of the project.
 Open a console and;
-cd CWD
-mkdir build
-cd build
-cmake ../
-make
+cd CWD;
+mkdir build;
+cd build;
+cmake ../;
+make;
 
 The output executable is named testtaskqueue and is located in the build folder, to run call
 ./testtaskqueue
